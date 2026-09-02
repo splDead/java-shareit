@@ -4,7 +4,9 @@ import ru.practicum.shareit.request.dto.ItemRequestDto;
 
 public final class ItemRequestMapper {
 
-    private ItemRequestMapper() { }
+    private ItemRequestMapper() {
+
+    }
 
     public static ItemRequestDto toItemRequestDto(ItemRequest itemRequest) {
         if (itemRequest == null) {
