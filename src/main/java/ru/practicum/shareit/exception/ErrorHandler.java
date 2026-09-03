@@ -2,6 +2,7 @@ package ru.practicum.shareit.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -37,19 +38,19 @@ public class ErrorHandler {
         return Map.of("error", "Произошла внутренняя ошибка сервера.");
     }
 
-    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleMethodArgumentNotValid(
-            final org.springframework.web.bind.MethodArgumentNotValidException e) {
+            final MethodArgumentNotValidException e) {
 
         String message = e.getBindingResult().getFieldError().getDefaultMessage();
         log.warn("Ошибка валидации данных: {}", message);
         return Map.of("error", message != null ? message : "Ошибка валидации полей");
     }
 
-    @ExceptionHandler(ru.practicum.shareit.exception.ConflictException.class)
+    @ExceptionHandler(ConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public Map<String, String> handleConflict(final ru.practicum.shareit.exception.ConflictException e) {
+    public Map<String, String> handleConflict(final ConflictException e) {
         log.warn("Конфликт данных: {}", e.getMessage());
         return Map.of("error", e.getMessage());
     }
