@@ -11,9 +11,9 @@ import java.util.List;
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
 
-    @Query(value = "SELECT * FROM comments WHERE item_id = :itemId", nativeQuery = true)
+    @Query("SELECT c FROM Comment c JOIN FETCH c.author WHERE c.item.id = :itemId")
     List<Comment> findAllByItemId(@Param("itemId") Long itemId);
 
-    @Query(value = "SELECT * FROM comments WHERE item_id IN :itemIds", nativeQuery = true)
+    @Query("SELECT c FROM Comment c JOIN FETCH c.author WHERE c.item.id IN :itemIds")
     List<Comment> findAllByItemIdIn(@Param("itemIds") List<Long> itemIds);
 }

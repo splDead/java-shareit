@@ -11,8 +11,7 @@ import java.util.List;
 @Repository
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
-    @Query(value = "SELECT * FROM items WHERE owner_id = :ownerId ORDER BY id ASC", nativeQuery = true)
-    List<Item> findAllByOwnerId(@Param("ownerId") Long ownerId);
+    List<Item> findAllByOwnerIdOrderByIdAsc(Long ownerId);
 
     @Query("SELECT i FROM Item i " +
             "WHERE i.available = true " +

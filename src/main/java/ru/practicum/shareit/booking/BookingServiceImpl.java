@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.shareit.booking.dto.BookingRequestDto;
 import ru.practicum.shareit.booking.dto.BookingResponseDto;
 import ru.practicum.shareit.exception.BadRequestException;
+import ru.practicum.shareit.exception.ForbiddenException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.ItemRepository;
 import ru.practicum.shareit.item.model.Item;
@@ -50,6 +51,11 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("Дата окончания бронирования не может быть раньше или равна дате начала");
         }
 
+        if (bookingRepository.existsByItemIdAndStatusAndStartLessThanAndEndGreaterThan(
+                item.getId(), BookingStatus.APPROVED, dto.getEnd(), dto.getStart())) {
+            throw new BadRequestException("Вещь с id=" + item.getId() + " уже забронирована на эти даты");
+        }
+
         Booking booking = Booking.builder()
             .start(dto.getStart())
             .end(dto.getEnd())
@@ -70,7 +76,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new NotFoundException("Бронирование с id=" + bookingId + " не найдено"));
 
         if (!booking.getItem().getOwner().getId().equals(userId)) {
-            throw new IllegalArgumentException("Только владелец вещи может подтверждать или отклонять бронирование");
+            throw new ForbiddenException("Только владелец вещи может подтверждать или отклонять бронирование");
         }
 
         if (booking.getStatus() != BookingStatus.WAITING) {
@@ -107,19 +113,16 @@ public class BookingServiceImpl implements BookingService {
             throw new NotFoundException("Пользователь с id=" + userId + " не найден");
         }
 
-        BookingState state = parseState(stateStr);
         LocalDateTime now = LocalDateTime.now();
-        List<Booking> bookings;
 
-        switch (state) {
-            case ALL -> bookings = bookingRepository.findAllByBookerIdOrderByStartDesc(userId);
-            case CURRENT -> bookings = bookingRepository.findAllByBookerIdAndStartBeforeAndEndAfterOrderByStartDesc(userId, now, now);
-            case PAST -> bookings = bookingRepository.findAllByBookerIdAndEndBeforeOrderByStartDesc(userId, now);
-            case FUTURE -> bookings = bookingRepository.findAllByBookerIdAndStartAfterOrderByStartDesc(userId, now);
-            case WAITING -> bookings = bookingRepository.findAllByBookerIdAndStatusOrderByStartDesc(userId, BookingStatus.WAITING);
-            case REJECTED -> bookings = bookingRepository.findAllByBookerIdAndStatusOrderByStartDesc(userId, BookingStatus.REJECTED);
-            default -> throw new BadRequestException("Unknown state: " + stateStr);
-        }
+        List<Booking> bookings = switch (parseState(stateStr)) {
+            case ALL -> bookingRepository.findAllByBookerIdOrderByStartDesc(userId);
+            case CURRENT -> bookingRepository.findAllByBookerIdAndStartBeforeAndEndAfterOrderByStartDesc(userId, now, now);
+            case PAST -> bookingRepository.findAllByBookerIdAndEndBeforeOrderByStartDesc(userId, now);
+            case FUTURE -> bookingRepository.findAllByBookerIdAndStartAfterOrderByStartDesc(userId, now);
+            case WAITING -> bookingRepository.findAllByBookerIdAndStatusOrderByStartDesc(userId, BookingStatus.WAITING);
+            case REJECTED -> bookingRepository.findAllByBookerIdAndStatusOrderByStartDesc(userId, BookingStatus.REJECTED);
+        };
 
         return bookings.stream().map(BookingMapper::toBookingResponseDto).collect(Collectors.toList());
     }
@@ -132,19 +135,16 @@ public class BookingServiceImpl implements BookingService {
             throw new NotFoundException("Пользователь с id=" + userId + " не найден");
         }
 
-        BookingState state = parseState(stateStr);
         LocalDateTime now = LocalDateTime.now();
-        List<Booking> bookings;
 
-        switch (state) {
-            case ALL -> bookings = bookingRepository.findAllByItemOwnerIdOrderByStartDesc(userId);
-            case CURRENT -> bookings = bookingRepository.findAllByItemOwnerIdAndStartBeforeAndEndAfterOrderByStartDesc(userId, now, now);
-            case PAST -> bookings = bookingRepository.findAllByItemOwnerIdAndEndBeforeOrderByStartDesc(userId, now);
-            case FUTURE -> bookings = bookingRepository.findAllByItemOwnerIdAndStartAfterOrderByStartDesc(userId, now);
-            case WAITING -> bookings = bookingRepository.findAllByItemOwnerIdAndStatusOrderByStartDesc(userId, BookingStatus.WAITING);
-            case REJECTED -> bookings = bookingRepository.findAllByItemOwnerIdAndStatusOrderByStartDesc(userId, BookingStatus.REJECTED);
-            default -> throw new BadRequestException("Unknown state: " + stateStr);
-        }
+        List<Booking> bookings = switch (parseState(stateStr)) {
+            case ALL -> bookingRepository.findAllByItemOwnerIdOrderByStartDesc(userId);
+            case CURRENT -> bookingRepository.findAllByItemOwnerIdAndStartBeforeAndEndAfterOrderByStartDesc(userId, now, now);
+            case PAST -> bookingRepository.findAllByItemOwnerIdAndEndBeforeOrderByStartDesc(userId, now);
+            case FUTURE -> bookingRepository.findAllByItemOwnerIdAndStartAfterOrderByStartDesc(userId, now);
+            case WAITING -> bookingRepository.findAllByItemOwnerIdAndStatusOrderByStartDesc(userId, BookingStatus.WAITING);
+            case REJECTED -> bookingRepository.findAllByItemOwnerIdAndStatusOrderByStartDesc(userId, BookingStatus.REJECTED);
+        };
 
         return bookings.stream().map(BookingMapper::toBookingResponseDto).collect(Collectors.toList());
     }

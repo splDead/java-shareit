@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.Objects;
 
 @RestControllerAdvice
 @Slf4j
@@ -36,26 +36,23 @@ public class ErrorHandler {
         return Map.of("error", e.getMessage());
     }
 
-    @ExceptionHandler(NoSuchElementException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Map<String, String> handleNotFound(final NoSuchElementException e) {
-        log.warn("Ресурс не найден: {}", e.getMessage());
-        return Map.of("error", e.getMessage());
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler(ForbiddenException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
-    public Map<String, String> handleIllegalArgument(final IllegalArgumentException e) {
-        log.warn("Ошибка валидации/доступа: {}", e.getMessage());
+    public Map<String, String> handleForbidden(final ForbiddenException e) {
+        log.warn("Доступ запрещен (403): {}", e.getMessage());
         return Map.of("error", e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Map<String, String> handleMethodArgumentNotValid(final MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getFieldError().getDefaultMessage();
+        String message = e.getBindingResult().getAllErrors().stream()
+            .map(error -> error.getDefaultMessage())
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse("Ошибка валидации полей");
         log.warn("Ошибка валидации данных: {}", message);
-        return Map.of("error", message != null ? message : "Ошибка валидации полей");
+        return Map.of("error", message);
     }
 
     @ExceptionHandler(ConflictException.class)

@@ -50,7 +50,7 @@ public class ItemController {
     }
 
     @GetMapping("/search")
-    public List<ItemDto> searchItems(@RequestParam String text) {
+    public List<ItemDto> searchItems(@RequestParam(defaultValue = "") String text) {
         log.info("Запрос GET /items/search со строкой поиска: {}", text);
         return itemService.searchItems(text);
     }

@@ -10,8 +10,6 @@ public interface ItemService {
 
     ItemDto updateItem(Long ownerId, Long itemId, ItemDto itemDto);
 
-    ItemDto getItemById(Long itemId);
-
     List<ItemDto> getItemsByOwner(Long ownerId);
 
     List<ItemDto> searchItems(String text);
