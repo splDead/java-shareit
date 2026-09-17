@@ -1,36 +1,34 @@
 package ru.practicum.shareit.request;
 
 import ru.practicum.shareit.request.dto.ItemRequestDto;
+import java.util.ArrayList;
 
 public final class ItemRequestMapper {
 
     private ItemRequestMapper() {
-
     }
 
-    public static ItemRequestDto toItemRequestDto(ItemRequest itemRequest) {
-        if (itemRequest == null) {
+    public static ItemRequestDto toItemRequestDto(ItemRequest request) {
+        if (request == null) {
             return null;
         }
-
         return ItemRequestDto.builder()
-            .id(itemRequest.getId())
-            .description(itemRequest.getDescription())
-            .requestorId(itemRequest.getRequestorId())
-            .created(itemRequest.getCreated())
+            .id(request.getId())
+            .description(request.getDescription())
+            .requestorId(request.getRequestor().getId())
+            .created(request.getCreated())
+            .items(new ArrayList<>())
             .build();
     }
 
-    public static ItemRequest toItemRequest(ItemRequestDto itemRequestDto) {
-        if (itemRequestDto == null) {
+    public static ItemRequest toItemRequest(ItemRequestDto dto) {
+        if (dto == null) {
             return null;
         }
-
         return ItemRequest.builder()
-            .id(itemRequestDto.getId())
-            .description(itemRequestDto.getDescription())
-            .requestorId(itemRequestDto.getRequestorId())
-            .created(itemRequestDto.getCreated())
+            .id(dto.getId())
+            .description(dto.getDescription())
+            .created(dto.getCreated())
             .build();
     }
 }

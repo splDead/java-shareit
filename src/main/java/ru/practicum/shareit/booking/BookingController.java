@@ -1,9 +1,12 @@
 package ru.practicum.shareit.booking;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-import ru.practicum.shareit.booking.dto.BookingDto;
+import ru.practicum.shareit.booking.dto.BookingRequestDto;
+import ru.practicum.shareit.booking.dto.BookingResponseDto;
+
 import java.util.List;
 
 @RestController
@@ -12,52 +15,42 @@ import java.util.List;
 @Slf4j
 public class BookingController {
 
+    private final BookingService bookingService;
     private static final String USER_ID_HEADER = "X-Sharer-User-Id";
 
     @PostMapping
-    public BookingDto createBooking(@RequestHeader(USER_ID_HEADER) Long bookerId,
-                                    @RequestBody BookingDto bookingDto) {
+    public BookingResponseDto createBooking(@RequestHeader(USER_ID_HEADER) Long bookerId,
+                                            @Valid @RequestBody BookingRequestDto bookingRequestDto) {
         log.info("Запрос POST /bookings на создание бронирования от пользователя: {}", bookerId);
-
-        bookingDto.setBookerId(bookerId);
-        bookingDto.setStatus(BookingStatus.WAITING);
-
-        return bookingDto;
+        return bookingService.create(bookerId, bookingRequestDto);
     }
 
     @PatchMapping("/{bookingId}")
-    public BookingDto approveBooking(@RequestHeader(USER_ID_HEADER) Long ownerId,
-                                     @PathVariable Long bookingId,
-                                     @RequestParam Boolean approved) {
+    public BookingResponseDto approveBooking(@RequestHeader(USER_ID_HEADER) Long ownerId,
+                                             @PathVariable Long bookingId,
+                                             @RequestParam Boolean approved) {
         log.info("Запрос PATCH /bookings/{} от владельца {} со статусом approved={}", bookingId, ownerId, approved);
-
-        return BookingDto.builder()
-            .id(bookingId)
-            .status(approved ? BookingStatus.APPROVED : BookingStatus.REJECTED)
-            .build();
+        return bookingService.approve(ownerId, bookingId, approved);
     }
 
     @GetMapping("/{bookingId}")
-    public BookingDto getBookingById(@RequestHeader(USER_ID_HEADER) Long userId,
-                                     @PathVariable Long bookingId) {
+    public BookingResponseDto getBookingById(@RequestHeader(USER_ID_HEADER) Long userId,
+                                             @PathVariable Long bookingId) {
         log.info("Запрос GET /bookings/{} от пользователя {}", bookingId, userId);
-
-        return BookingDto.builder().id(bookingId).build();
+        return bookingService.getById(userId, bookingId);
     }
 
     @GetMapping
-    public List<BookingDto> getAllByBooker(@RequestHeader(USER_ID_HEADER) Long bookerId,
-                                           @RequestParam(defaultValue = "ALL") String state) {
+    public List<BookingResponseDto> getAllByBooker(@RequestHeader(USER_ID_HEADER) Long bookerId,
+                                                   @RequestParam(defaultValue = "ALL") String state) {
         log.info("Запрос GET /bookings от арендатора {} с параметром state={}", bookerId, state);
-
-        return List.of();
+        return bookingService.getAllByBooker(bookerId, state);
     }
 
     @GetMapping("/owner")
-    public List<BookingDto> getAllByOwner(@RequestHeader(USER_ID_HEADER) Long ownerId,
-                                          @RequestParam(defaultValue = "ALL") String state) {
+    public List<BookingResponseDto> getAllByOwner(@RequestHeader(USER_ID_HEADER) Long ownerId,
+                                                  @RequestParam(defaultValue = "ALL") String state) {
         log.info("Запрос GET /bookings/owner от владельца {} с параметром state={}", ownerId, state);
-
-        return List.of();
+        return bookingService.getAllByOwner(ownerId, state);
     }
 }
