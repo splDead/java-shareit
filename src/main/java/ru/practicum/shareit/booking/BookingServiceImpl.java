@@ -33,10 +33,14 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponseDto create(Long userId, BookingRequestDto dto) {
         log.info("Создание бронирования пользователем id={} для вещи id={}", userId, dto.getItemId());
 
+        if (dto.getEnd().isBefore(dto.getStart()) || dto.getEnd().isEqual(dto.getStart())) {
+            throw new BadRequestException("Дата окончания бронирования не может быть раньше или равна дате начала");
+        }
+
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
-        Item item = itemRepository.findById(dto.getItemId())
+        Item item = itemRepository.findByIdWithLock(dto.getItemId())
             .orElseThrow(() -> new NotFoundException("Вещь с id=" + dto.getItemId() + " не найдена"));
 
         if (!item.getAvailable()) {
@@ -44,15 +48,10 @@ public class BookingServiceImpl implements BookingService {
         }
 
         if (item.getOwner().getId().equals(userId)) {
-            throw new NotFoundException("Владелец вещи не может забронировать сам у себя");
+            throw new ForbiddenException("Владелец вещи не может забронировать сам у себя");
         }
 
-        if (dto.getEnd().isBefore(dto.getStart()) || dto.getEnd().isEqual(dto.getStart())) {
-            throw new BadRequestException("Дата окончания бронирования не может быть раньше или равна дате начала");
-        }
-
-        if (bookingRepository.existsByItemIdAndStatusAndStartLessThanAndEndGreaterThan(
-                item.getId(), BookingStatus.APPROVED, dto.getEnd(), dto.getStart())) {
+        if (isOverlapping(item.getId(), dto.getStart(), dto.getEnd())) {
             throw new BadRequestException("Вещь с id=" + item.getId() + " уже забронирована на эти даты");
         }
 
@@ -83,10 +82,24 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("Статус бронирования уже изменен");
         }
 
+        if (approved) {
+            Item item = itemRepository.findByIdWithLock(booking.getItem().getId())
+                .orElseThrow(() -> new NotFoundException("Вещь с id=" + booking.getItem().getId() + " не найдена"));
+
+            if (isOverlapping(item.getId(), booking.getStart(), booking.getEnd())) {
+                throw new BadRequestException("Вещь с id=" + item.getId() + " уже забронирована на эти даты");
+            }
+        }
+
         booking.setStatus(approved ? BookingStatus.APPROVED : BookingStatus.REJECTED);
         return BookingMapper.toBookingResponseDto(bookingRepository.save(booking));
     }
 
+
+    private boolean isOverlapping(Long itemId, LocalDateTime start, LocalDateTime end) {
+        return bookingRepository.existsByItemIdAndStatusAndStartLessThanAndEndGreaterThan(
+                itemId, BookingStatus.APPROVED, end, start);
+    }
 
     @Override
     public BookingResponseDto getById(Long userId, Long bookingId) {
@@ -106,8 +119,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public List<BookingResponseDto> getAllByBooker(Long userId, String stateStr) {
-        log.info("Получение списка бронирований арендатора id={} со статусом={}", userId, stateStr);
+    public List<BookingResponseDto> getAllByBooker(Long userId, BookingState state) {
+        log.info("Получение списка бронирований арендатора id={} со статусом={}", userId, state);
 
         if (!userRepository.existsById(userId)) {
             throw new NotFoundException("Пользователь с id=" + userId + " не найден");
@@ -115,7 +128,7 @@ public class BookingServiceImpl implements BookingService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        List<Booking> bookings = switch (parseState(stateStr)) {
+        List<Booking> bookings = switch (state) {
             case ALL -> bookingRepository.findAllByBookerIdOrderByStartDesc(userId);
             case CURRENT -> bookingRepository.findAllByBookerIdAndStartBeforeAndEndAfterOrderByStartDesc(userId, now, now);
             case PAST -> bookingRepository.findAllByBookerIdAndEndBeforeOrderByStartDesc(userId, now);
@@ -128,8 +141,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public List<BookingResponseDto> getAllByOwner(Long userId, String stateStr) {
-        log.info("Получение списка бронирований вещей владельца id={} со статусом={}", userId, stateStr);
+    public List<BookingResponseDto> getAllByOwner(Long userId, BookingState state) {
+        log.info("Получение списка бронирований вещей владельца id={} со статусом={}", userId, state);
 
         if (!userRepository.existsById(userId)) {
             throw new NotFoundException("Пользователь с id=" + userId + " не найден");
@@ -137,7 +150,7 @@ public class BookingServiceImpl implements BookingService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        List<Booking> bookings = switch (parseState(stateStr)) {
+        List<Booking> bookings = switch (state) {
             case ALL -> bookingRepository.findAllByItemOwnerIdOrderByStartDesc(userId);
             case CURRENT -> bookingRepository.findAllByItemOwnerIdAndStartBeforeAndEndAfterOrderByStartDesc(userId, now, now);
             case PAST -> bookingRepository.findAllByItemOwnerIdAndEndBeforeOrderByStartDesc(userId, now);
@@ -147,13 +160,5 @@ public class BookingServiceImpl implements BookingService {
         };
 
         return bookings.stream().map(BookingMapper::toBookingResponseDto).collect(Collectors.toList());
-    }
-
-    private BookingState parseState(String stateStr) {
-        try {
-            return BookingState.valueOf(stateStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException("Unknown state: " + stateStr);
-        }
     }
 }

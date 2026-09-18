@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Map;
 import java.util.Objects;
@@ -52,6 +53,17 @@ public class ErrorHandler {
             .findFirst()
             .orElse("Ошибка валидации полей");
         log.warn("Ошибка валидации данных: {}", message);
+        return Map.of("error", message);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, String> handleTypeMismatch(final MethodArgumentTypeMismatchException e) {
+        boolean isEnum = e.getRequiredType() != null && e.getRequiredType().isEnum();
+        String message = isEnum
+                ? "Unknown " + e.getName() + ": " + e.getValue()
+                : "Некорректное значение параметра '" + e.getName() + "': " + e.getValue();
+        log.warn("Некорректный параметр запроса (400): {}", message);
         return Map.of("error", message);
     }
 

@@ -3,14 +3,20 @@ package ru.practicum.shareit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import ru.practicum.shareit.booking.Booking;
+import ru.practicum.shareit.booking.BookingController;
 import ru.practicum.shareit.booking.BookingRepository;
+import ru.practicum.shareit.booking.BookingService;
 import ru.practicum.shareit.booking.BookingServiceImpl;
+import ru.practicum.shareit.booking.BookingState;
 import ru.practicum.shareit.booking.BookingStatus;
 import ru.practicum.shareit.booking.dto.BookingRequestDto;
 import ru.practicum.shareit.booking.dto.BookingResponseDto;
 import ru.practicum.shareit.exception.BadRequestException;
 import ru.practicum.shareit.exception.ConflictException;
+import ru.practicum.shareit.exception.ErrorHandler;
 import ru.practicum.shareit.exception.ForbiddenException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.item.CommentRepository;
@@ -43,6 +49,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class ShareItTests {
 
@@ -307,7 +316,7 @@ class ShareItTests {
 		LocalDateTime end = start.plusDays(1);
 
 		when(userRepository.findById(2L)).thenReturn(Optional.of(booker));
-		when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.of(item));
 		when(bookingRepository.save(any(Booking.class))).thenReturn(booking(BookingStatus.WAITING, start, end));
 
 		BookingResponseDto created = bookingService.create(2L, bookingRequest(start, end));
@@ -321,28 +330,27 @@ class ShareItTests {
 	void shouldThrowExceptionWhenBookingUnavailableItem() {
 		item.setAvailable(false);
 		when(userRepository.findById(2L)).thenReturn(Optional.of(booker));
-		when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.of(item));
 
 		LocalDateTime start = LocalDateTime.now().plusDays(1);
 		assertThrows(BadRequestException.class, () -> bookingService.create(2L, bookingRequest(start, start.plusDays(1))));
 	}
 
 	@Test
-	void shouldThrowExceptionWhenOwnerBooksOwnItem() {
+	void shouldThrowForbiddenWhenOwnerBooksOwnItem() {
 		when(userRepository.findById(1L)).thenReturn(Optional.of(owner));
-		when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.of(item));
 
 		LocalDateTime start = LocalDateTime.now().plusDays(1);
-		assertThrows(NotFoundException.class, () -> bookingService.create(1L, bookingRequest(start, start.plusDays(1))));
+		assertThrows(ForbiddenException.class, () -> bookingService.create(1L, bookingRequest(start, start.plusDays(1))));
 	}
 
 	@Test
-	void shouldThrowExceptionWhenBookingEndEqualsStart() {
-		when(userRepository.findById(2L)).thenReturn(Optional.of(booker));
-		when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
-
+	void shouldThrowExceptionWhenBookingEndEqualsStartBeforeTouchingDatabase() {
 		LocalDateTime start = LocalDateTime.now().plusDays(1);
+
 		assertThrows(BadRequestException.class, () -> bookingService.create(2L, bookingRequest(start, start)));
+		Mockito.verifyNoInteractions(userRepository, itemRepository);
 	}
 
 	@Test
@@ -351,7 +359,7 @@ class ShareItTests {
 		LocalDateTime end = start.plusDays(1);
 
 		when(userRepository.findById(2L)).thenReturn(Optional.of(booker));
-		when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.of(item));
 		when(bookingRepository.existsByItemIdAndStatusAndStartLessThanAndEndGreaterThan(
 				1L, BookingStatus.APPROVED, end, start)).thenReturn(true);
 
@@ -361,7 +369,7 @@ class ShareItTests {
 	@Test
 	void shouldThrowExceptionWhenBookingItemNotFound() {
 		when(userRepository.findById(2L)).thenReturn(Optional.of(booker));
-		when(itemRepository.findById(1L)).thenReturn(Optional.empty());
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.empty());
 
 		LocalDateTime start = LocalDateTime.now().plusDays(1);
 		assertThrows(NotFoundException.class, () -> bookingService.create(2L, bookingRequest(start, start.plusDays(1))));
@@ -371,6 +379,7 @@ class ShareItTests {
 	void shouldApproveAndRejectBookingByOwner() {
 		LocalDateTime start = LocalDateTime.now().plusDays(1);
 
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.of(item));
 		when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking(BookingStatus.WAITING, start, start.plusDays(1))));
 		when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -378,6 +387,30 @@ class ShareItTests {
 
 		when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking(BookingStatus.WAITING, start, start.plusDays(1))));
 		assertEquals(BookingStatus.REJECTED, bookingService.approve(1L, 1L, false).getStatus());
+	}
+
+	@Test
+	void shouldThrowExceptionWhenApproveOverlapsAnotherApprovedBooking() {
+		LocalDateTime start = LocalDateTime.now().plusDays(1);
+		LocalDateTime end = start.plusDays(1);
+
+		when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking(BookingStatus.WAITING, start, end)));
+		when(itemRepository.findByIdWithLock(1L)).thenReturn(Optional.of(item));
+		when(bookingRepository.existsByItemIdAndStatusAndStartLessThanAndEndGreaterThan(
+			1L, BookingStatus.APPROVED, end, start)).thenReturn(true);
+
+		assertThrows(BadRequestException.class, () -> bookingService.approve(1L, 1L, true));
+	}
+
+	@Test
+	void shouldRejectBookingEvenWhenDatesAreTaken() {
+		LocalDateTime start = LocalDateTime.now().plusDays(1);
+
+		when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking(BookingStatus.WAITING, start, start.plusDays(1))));
+		when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+
+		assertEquals(BookingStatus.REJECTED, bookingService.approve(1L, 1L, false).getStatus());
+		Mockito.verify(itemRepository, Mockito.never()).findByIdWithLock(anyLong());
 	}
 
 	@Test
@@ -425,7 +458,7 @@ class ShareItTests {
 		when(bookingRepository.findAllByBookerIdAndStartAfterOrderByStartDesc(eq(2L), any())).thenReturn(List.of(existing));
 		when(bookingRepository.findAllByBookerIdAndStatusOrderByStartDesc(eq(2L), any())).thenReturn(List.of(existing));
 
-		for (String state : List.of("ALL", "CURRENT", "PAST", "FUTURE", "WAITING", "REJECTED", "all")) {
+		for (BookingState state : BookingState.values()) {
 			assertEquals(1, bookingService.getAllByBooker(2L, state).size(), "state=" + state);
 		}
 	}
@@ -443,22 +476,32 @@ class ShareItTests {
 		when(bookingRepository.findAllByItemOwnerIdAndStartAfterOrderByStartDesc(eq(1L), any())).thenReturn(List.of(existing));
 		when(bookingRepository.findAllByItemOwnerIdAndStatusOrderByStartDesc(eq(1L), any())).thenReturn(List.of(existing));
 
-		for (String state : List.of("ALL", "CURRENT", "PAST", "FUTURE", "WAITING", "REJECTED")) {
+		for (BookingState state : BookingState.values()) {
 			assertEquals(1, bookingService.getAllByOwner(1L, state).size(), "state=" + state);
 		}
 	}
 
 	@Test
-	void shouldThrowExceptionWhenStateIsUnknown() {
-		when(userRepository.existsById(2L)).thenReturn(true);
-		assertThrows(BadRequestException.class, () -> bookingService.getAllByBooker(2L, "UNSUPPORTED"));
+	void shouldReturnBadRequestWhenStateIsUnknown() throws Exception {
+		BookingService bookingServiceMock = Mockito.mock(BookingService.class);
+		MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new BookingController(bookingServiceMock))
+			.setControllerAdvice(new ErrorHandler())
+			.build();
+
+		mockMvc.perform(get("/bookings").header("X-Sharer-User-Id", 2L).param("state", "UNSUPPORTED"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error").value("Unknown state: UNSUPPORTED"));
+
+		mockMvc.perform(get("/bookings").header("X-Sharer-User-Id", 2L))
+			.andExpect(status().isOk());
+		Mockito.verify(bookingServiceMock).getAllByBooker(2L, BookingState.ALL);
 	}
 
 	@Test
 	void shouldThrowExceptionWhenBookingsRequestedByUnknownUser() {
 		when(userRepository.existsById(99L)).thenReturn(false);
-		assertThrows(NotFoundException.class, () -> bookingService.getAllByBooker(99L, "ALL"));
-		assertThrows(NotFoundException.class, () -> bookingService.getAllByOwner(99L, "ALL"));
+		assertThrows(NotFoundException.class, () -> bookingService.getAllByBooker(99L, BookingState.ALL));
+		assertThrows(NotFoundException.class, () -> bookingService.getAllByOwner(99L, BookingState.ALL));
 	}
 
 	@Test
