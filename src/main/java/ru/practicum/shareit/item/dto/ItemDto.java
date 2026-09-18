@@ -2,10 +2,10 @@ package ru.practicum.shareit.item.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import ru.practicum.shareit.user.dto.CreateGroup;
+
+import java.util.List;
 
 @Data
 @AllArgsConstructor
@@ -14,14 +14,25 @@ import lombok.NoArgsConstructor;
 public class ItemDto {
     private Long id;
 
-    @NotBlank(message = "Название вещи не может быть пустым")
+    @NotBlank(message = "Название вещи не может быть пустым", groups = CreateGroup.class)
     private String name;
 
-    @NotBlank(message = "Описание вещи не может быть пустым")
+    @NotBlank(message = "Описание вещи не может быть пустым", groups = CreateGroup.class)
     private String description;
 
-    @NotNull(message = "Статус доступности вещи должен быть указан")
+    @NotNull(message = "Статус доступности должен быть указан", groups = CreateGroup.class)
     private Boolean available;
 
     private Long requestId;
+
+    private BookingInfo lastBooking;
+    private BookingInfo nextBooking;
+    private List<CommentResponseDto> comments;
+
+    @Data
+    @AllArgsConstructor
+    public static class BookingInfo {
+        private Long id;
+        private Long bookerId;
+    }
 }

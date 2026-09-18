@@ -15,10 +15,10 @@ public class UserDto {
 
     private Long id;
 
-    @NotBlank(message = "Имя пользователя не может быть пустым")
+    @NotBlank(message = "Имя пользователя не может быть пустым", groups = CreateGroup.class)
     private String name;
 
-    @NotBlank(message = "Email не может быть пустым")
-    @Email(message = "Некорректный формат email")
+    @NotBlank(message = "Email не может быть пустым", groups = CreateGroup.class)
+    @Email(message = "Некорректный формат email", groups = {CreateGroup.class, UpdateGroup.class})
     private String email;
 }
