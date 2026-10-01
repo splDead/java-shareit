@@ -1,33 +1,41 @@
 services:
-  db:
-    image: dh-mirror.gitverse.ru/library/postgres:16-alpine
-    container_name: shareit-db
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=shareit
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    command: postgres -c synchronous_commit=off -c fsync=off
-    volumes:
-      - shareit_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d shareit"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   gateway:
-    build: .
-    container_name: shareit-app
+    build: gateway
+    image: shareit-gateway
+    container_name: shareit-gateway
     ports:
       - "8080:8080"
-    environment:
-      - DB_HOST=db
-      - TZ=Europe/Moscow
     depends_on:
-      db:
-        condition: service_healthy
+      - server
+    environment:
+      - SHAREIT_SERVER_URL=http://server:9090
+      - TZ=Europe/Moscow
 
-volumes:
-  shareit_db_data:
+  server:
+    build: server
+    image: shareit-server
+    container_name: shareit-server
+    ports:
+      - "9090:9090"
+    depends_on:
+      - db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/shareit
+      - SPRING_DATASOURCE_USERNAME=shareit
+      - SPRING_DATASOURCE_PASSWORD=shareit
+      - TZ=Europe/Moscow
+
+  db:
+    image: dh-mirror.gitverse.ru/library/postgres:16.1
+    container_name: postgres
+    ports:
+      - "6541:5432"
+    environment:
+      - POSTGRES_PASSWORD=shareit
+      - POSTGRES_USER=shareit
+      - POSTGRES_DB=shareit
+    healthcheck:
+      test: pg_isready -q -d $$POSTGRES_DB -U $$POSTGRES_USER
+      timeout: 5s
+      interval: 5s
+      retries: 10
