@@ -14,6 +14,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 @Slf4j
@@ -64,8 +65,10 @@ public class ErrorHandler {
         String message = errors.stream()
             .map(MessageSourceResolvable::getDefaultMessage)
             .filter(Objects::nonNull)
-            .findFirst()
-            .orElse("Ошибка валидации полей");
+            .collect(Collectors.joining("; "));
+        if (message.isEmpty()) {
+            message = "Ошибка валидации полей";
+        }
         log.warn("Ошибка валидации данных: {}", message);
         return Map.of("error", message);
     }

@@ -1,5 +1,6 @@
 package ru.practicum.shareit.client;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -13,6 +14,8 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 public class BaseClient {
+    protected static final Duration TIMEOUT = Duration.ofSeconds(5);
+
     protected final RestTemplate rest;
 
     public BaseClient(RestTemplate rest) {
